@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Roboto_Slab } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
-const robotoSlab = Roboto_Slab({subsets:['latin'],variable:'--font-serif'});
+const robotoSlab = Roboto_Slab({ subsets: ['latin'], variable: '--font-serif' });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,11 +30,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-serif", robotoSlab.variable)}>
+    <html
+      lang="en"
+      className={cn("font-serif", robotoSlab.variable)}
+      suppressHydrationWarning
+    >
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SidebarProvider>
+            <TooltipProvider>
+              <AppSidebar />
+              <main>
+                <SidebarTrigger />
+                {children}
+              </main>
+            </TooltipProvider>
+          </SidebarProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
