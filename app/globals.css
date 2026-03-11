@@ -1,3 +1,8 @@
+@import "prosekit/pm/view/style/prosemirror.css";
+@import "prosekit/basic/style.css";
+@import "prosekit/basic/typography.css";
+@import "prosekit/extensions/list/style.css";
+@import "prosekit/extensions/table/style.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -126,5 +131,29 @@
   }
   html {
     @apply font-serif;
+  }
+}
+
+@layer components {
+  .prosekit-editor-surface {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .prosekit-editor-surface > div {
+    min-height: 100%;
+    height: 100%;
+  }
+
+  .prosekit-editor-surface .ProseMirror {
+    min-height: 100%;
+    height: 100%;
+    overflow: auto;
+  }
+
+  .prosekit-editor-surface .ProseMirror:focus,
+  .prosekit-editor-surface .ProseMirror:focus-visible {
+    outline: none;
+    box-shadow: none;
   }
 }
