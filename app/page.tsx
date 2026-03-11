@@ -15,6 +15,7 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-4xl p-6">
       <ProsekitMarkdownEditor
+        heightClassName="h-[26rem]"
         initialMarkdown={initialMarkdown}
         onChange={(nextMarkdown) => setMarkdown(nextMarkdown)}
       />
@@ -64,4 +65,3 @@ function getMeaningfulConnection(): boolean {
   // The point is to get a connection that allows you to control your opponent and attempt techniques.
   return true;
 }
-

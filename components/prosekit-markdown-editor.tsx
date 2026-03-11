@@ -30,10 +30,12 @@ import { gfm } from 'turndown-plugin-gfm';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ListBulletsIcon, TextBolderIcon, TextItalicIcon, ListNumbersIcon, TableIcon, YoutubeLogoIcon } from '@phosphor-icons/react';
 
 export type ProsekitMarkdownEditorProps = {
   initialMarkdown: string;
   onChange?: (markdown: string) => void;
+  heightClassName?: string;
   className?: string;
 };
 
@@ -247,6 +249,7 @@ const youtubeExtension = union(
 export function ProsekitMarkdownEditor({
   initialMarkdown,
   onChange,
+  heightClassName = 'h-[26rem]',
   className,
 }: ProsekitMarkdownEditorProps) {
   const mountRef = React.useRef<HTMLDivElement | null>(null);
@@ -343,26 +346,26 @@ export function ProsekitMarkdownEditor({
   }, [editor, runCommand]);
 
   return (
-    <div className={cn('h-[26rem] min-h-0', className)}>
+    <div className={cn('min-h-0', heightClassName, className)}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border border-border bg-background p-2">
-        <div className="flex flex-wrap gap-2 border-b border-border">
-          <Button disabled={!editor} onClick={toggleBold} size="sm" type="button" variant="outline">
-            Bold
+        <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+          <Button disabled={!editor} onClick={toggleBold} size="icon" type="button" variant="outline">
+            <TextBolderIcon className="h-4 w-4" />
           </Button>
-          <Button disabled={!editor} onClick={toggleItalic} size="sm" type="button" variant="outline">
-            Italic
+          <Button disabled={!editor} onClick={toggleItalic} size="icon" type="button" variant="outline">
+            <TextItalicIcon className="h-4 w-4" />
           </Button>
-          <Button disabled={!editor} onClick={toggleBulletList} size="sm" type="button" variant="outline">
-            UL
+          <Button disabled={!editor} onClick={toggleBulletList} size="icon" type="button" variant="outline">
+            <ListBulletsIcon className="h-4 w-4" />
           </Button>
-          <Button disabled={!editor} onClick={toggleOrderedList} size="sm" type="button" variant="outline">
-            OL
+          <Button disabled={!editor} onClick={toggleOrderedList} size="icon" type="button" variant="outline">
+            <ListNumbersIcon className="h-4 w-4" />
           </Button>
-          <Button disabled={!editor} onClick={insertTableNode} size="sm" type="button" variant="outline">
-            Table
+          <Button disabled={!editor} onClick={insertTableNode} size="icon" type="button" variant="outline">
+            <TableIcon className="h-4 w-4" />
           </Button>
-          <Button disabled={!editor} onClick={insertYoutube} size="sm" type="button" variant="outline">
-            YouTube
+          <Button disabled={!editor} onClick={insertYoutube} size="icon" type="button" variant="outline">
+            <YoutubeLogoIcon className="h-4 w-4" />
           </Button>
         </div>
         <div className="prosekit-editor-surface relative min-h-0 flex-1">
