@@ -6,13 +6,17 @@ import { defineBasicExtension } from 'prosekit/basic';
 import {
   type Editor,
   createEditor,
+  defineDropHandler,
   defineNodeSpec,
   definePasteHandler,
   defineUpdateHandler,
   insertNode,
   union,
 } from 'prosekit/core';
-import { ProseKit, useEditorDerivedValue } from 'prosekit/react';
+import { UploadTask } from 'prosekit/extensions/file';
+import type { ImageAttrs } from 'prosekit/extensions/image';
+import { ProseKit, defineReactNodeView, type ReactNodeViewProps, useEditorDerivedValue } from 'prosekit/react';
+import { ResizableHandle, ResizableRoot } from 'prosekit/react/resizable';
 import {
   TableHandleColumnRoot,
   TableHandleColumnTrigger,
@@ -32,9 +36,24 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ListBulletsIcon, TextBolderIcon, TextItalicIcon, ListNumbersIcon, TableIcon, YoutubeLogoIcon } from '@phosphor-icons/react';
 
+type ImageInsertAttrs = {
+  src: string;
+  alt?: string | null;
+  title?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+type ImageAddResult = string | ImageInsertAttrs | null | void;
+
+export type ImageAddContext = {
+  source: 'paste' | 'drop';
+};
+
 export type ProsekitMarkdownEditorProps = {
   initialMarkdown: string;
   onChange?: (markdown: string) => void;
+  onImageAdd?: (file: File, context: ImageAddContext) => Promise<ImageAddResult> | ImageAddResult;
   heightClassName?: string;
   className?: string;
 };
@@ -75,9 +94,148 @@ function htmlToMarkdown(html: string): string {
   return turndown.turndown(html);
 }
 
+function getImageAttrs(result: ImageAddResult): ImageInsertAttrs | null {
+  if (!result) return null;
+  if (typeof result === 'string') return { src: result };
+  if (!result.src) return null;
+  return result;
+}
+
+async function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image for dimension lookup'));
+      img.src = objectUrl;
+    });
+
+    if (!img.naturalWidth || !img.naturalHeight) return null;
+    return { height: img.naturalHeight, width: img.naturalWidth };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function getImageFileFromPasteEvent(event: ClipboardEvent): File | null {
+  const files = event.clipboardData?.files;
+  if (files?.length) {
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) return file;
+    }
+  }
+
+  const items = event.clipboardData?.items;
+  if (items?.length) {
+    for (const item of Array.from(items)) {
+      if (!item.type.startsWith('image/')) continue;
+      const file = item.getAsFile();
+      if (file) return file;
+    }
+  }
+
+  return null;
+}
+
+function getImageFileFromDropEvent(event: DragEvent): File | null {
+  const files = event.dataTransfer?.files;
+  if (!files?.length) return null;
+
+  for (const file of Array.from(files)) {
+    if (file.type.startsWith('image/')) return file;
+  }
+  return null;
+}
+
 type CommandFn = ((...args: never[]) => void) & {
   canExec?: () => boolean;
 };
+
+function ImageView(props: ReactNodeViewProps) {
+  const attrs = props.node.attrs as ImageAttrs;
+  const url = attrs.src || '';
+  const uploading = url.startsWith('blob:');
+
+  const [aspectRatio, setAspectRatio] = React.useState<number | undefined>();
+  const [error, setError] = React.useState<string | undefined>();
+  const [progress, setProgress] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!uploading) return;
+    const uploadTask = UploadTask.get<string>(url);
+    if (!uploadTask) return;
+
+    let canceled = false;
+
+    uploadTask.finished.catch((nextError) => {
+      if (canceled) return;
+      setError(String(nextError));
+    });
+    const unsubscribeProgress = uploadTask.subscribeProgress(({ loaded, total }) => {
+      if (canceled) return;
+      setProgress(total ? loaded / total : 0);
+    });
+
+    return () => {
+      canceled = true;
+      unsubscribeProgress();
+    };
+  }, [url, uploading]);
+
+  const handleImageLoad = React.useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const { naturalHeight, naturalWidth } = img;
+    const ratio = naturalWidth / naturalHeight;
+    if (ratio && Number.isFinite(ratio)) {
+      setAspectRatio(ratio);
+    }
+    if (naturalWidth && naturalHeight && (!attrs.width || !attrs.height)) {
+      props.setAttrs({ height: naturalHeight, width: naturalWidth });
+    }
+  }, [attrs.height, attrs.width, props]);
+
+  return (
+    <ResizableRoot
+      aspectRatio={aspectRatio}
+      className="relative my-2 box-border flex max-h-[600px] max-w-full min-h-[64px] min-w-[64px] items-center justify-center overflow-hidden outline-2 outline-solid outline-transparent data-selected:outline-ring group"
+      data-selected={props.selected ? '' : undefined}
+      height={attrs.height ?? null}
+      onResizeEnd={(event) => props.setAttrs(event.detail)}
+      width={attrs.width ?? null}
+    >
+      {url && !error ? (
+        <img
+          alt="upload preview"
+          className="h-full w-full max-h-full max-w-full object-contain"
+          onLoad={handleImageLoad}
+          src={url}
+        />
+      ) : null}
+      {uploading && !error ? (
+        <div className="absolute bottom-0 left-0 m-1 flex items-center gap-2 rounded-sm bg-black/60 p-1.5 text-xs text-white/80 transition">
+          <div>{Math.round(progress * 100)}%</div>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted/80 p-2 text-sm">
+          Failed to upload image
+        </div>
+      ) : null}
+      <ResizableHandle
+        className="absolute right-0 bottom-0 m-1.5 rounded-sm bg-black/30 p-1 text-white/50 opacity-0 transition hover:opacity-100 group-hover:opacity-100 group-data-resizing:opacity-100"
+        position="bottom-right"
+      >
+        <div className="h-4 w-4 border-r border-b border-current" />
+      </ResizableHandle>
+    </ResizableRoot>
+  );
+}
+
+const imageViewExtension = defineReactNodeView({
+  component: ImageView,
+  name: 'image',
+});
 
 function getTableHandleState(editor: Editor) {
   const commands = editor.commands as Record<string, CommandFn>;
@@ -249,18 +407,90 @@ const youtubeExtension = union(
 export function ProsekitMarkdownEditor({
   initialMarkdown,
   onChange,
+  onImageAdd,
   heightClassName = 'h-[26rem]',
   className,
 }: ProsekitMarkdownEditorProps) {
   const mountRef = React.useRef<HTMLDivElement | null>(null);
+  const imageHandlerRef = React.useRef<ProsekitMarkdownEditorProps['onImageAdd']>(onImageAdd);
   const previousTextLengthRef = React.useRef<number>(0);
   const [initialHtml] = React.useState(() => markdownToHtml(initialMarkdown));
   const [editor, setEditor] = React.useState<Editor | null>(null);
 
   React.useEffect(() => {
+    imageHandlerRef.current = onImageAdd;
+  }, [onImageAdd]);
+
+  React.useEffect(() => {
     if (typeof document === 'undefined') return;
 
-    const extension = union(defineBasicExtension(), youtubeExtension);
+    const imagePasteAndDropExtension = union(
+      definePasteHandler((view, event) => {
+        const onImageAddHandler = imageHandlerRef.current;
+        if (!onImageAddHandler) return false;
+
+        const file = getImageFileFromPasteEvent(event);
+        if (!file) return false;
+
+        event.preventDefault();
+
+        void Promise.resolve(onImageAddHandler(file, { source: 'paste' }))
+          .then(async (result) => {
+            if (view.isDestroyed) return;
+            const attrs = getImageAttrs(result);
+            if (!attrs) return;
+            if (!attrs.width || !attrs.height) {
+              const dimensions = await getImageDimensions(file);
+              if (dimensions) {
+                attrs.width = dimensions.width;
+                attrs.height = dimensions.height;
+              }
+            }
+            insertNode({ attrs, type: 'image' })(view.state, view.dispatch, view);
+          })
+          .catch((error) => {
+            console.error('[prosekit] Failed to handle pasted image:', error);
+          });
+
+        return true;
+      }),
+      defineDropHandler((view, event) => {
+        const onImageAddHandler = imageHandlerRef.current;
+        if (!onImageAddHandler) return false;
+
+        const file = getImageFileFromDropEvent(event);
+        if (!file) return false;
+
+        event.preventDefault();
+
+        void Promise.resolve(onImageAddHandler(file, { source: 'drop' }))
+          .then(async (result) => {
+            if (view.isDestroyed) return;
+            const attrs = getImageAttrs(result);
+            if (!attrs) return;
+            if (!attrs.width || !attrs.height) {
+              const dimensions = await getImageDimensions(file);
+              if (dimensions) {
+                attrs.width = dimensions.width;
+                attrs.height = dimensions.height;
+              }
+            }
+            insertNode({ attrs, type: 'image' })(view.state, view.dispatch, view);
+          })
+          .catch((error) => {
+            console.error('[prosekit] Failed to handle dropped image:', error);
+          });
+
+        return true;
+      })
+    );
+
+    const extension = union(
+      defineBasicExtension(),
+      imageViewExtension,
+      youtubeExtension,
+      imagePasteAndDropExtension
+    );
     const nextEditor = createEditor({
       defaultContent: initialHtml,
       extension,

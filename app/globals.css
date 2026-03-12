@@ -7,6 +7,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@egoist/tailwindcss-icons";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -156,4 +158,16 @@
     outline: none;
     box-shadow: none;
   }
+
+}
+
+/* Keep resizable image views stable.
+   This must be unlayered so it can override prosekit/basic unlayered typography rules. */
+.prosekit-editor-surface .ProseMirror prosekit-resizable-root > img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  object-fit: contain !important;
 }
